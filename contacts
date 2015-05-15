@@ -1,0 +1,315 @@
+#include <utility.h>
+#include <ansi_c.h>
+#include <formatio.h>
+#include <cvirte.h>		
+#include <userint.h>
+#include "panel.h"
+
+static int panelHandle;
+static int panelInput;
+static int panelSearch; 
+static int panelDelete;
+
+unsigned char *buffer;
+char str[90];
+char path[MAX_PATHNAME_LEN];
+int sel;
+long filesize;
+int file;
+int bytes;
+int i,j,k=-1;
+
+int main (int argc, char *argv[])
+{
+	if (InitCVIRTE (0, argv, 0) == 0)
+		return -1;	/* out of memory */
+	if ((panelHandle = LoadPanel (0, "panel.uir", PANEL)) < 0)
+		return -1;
+	DisplayPanel (panelHandle);
+	RunUserInterface ();//运行用户界面，并且允许调用鼠标单击控件所对应的回调函数
+	DiscardPanel (panelHandle);
+	return 0;
+}
+
+int CVICALLBACK Input (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	
+	switch (event)
+	{
+		
+		case EVENT_COMMIT:
+			
+				if ((panelInput = LoadPanel (0, "panel.uir", PANEL2)) < 0)
+					return -1;
+				DisplayPanel (panelInput);//显示添加联系人面板
+			
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Open (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	
+	
+	switch (event)
+	{
+		
+		case EVENT_COMMIT:
+			
+			
+			sel=FileSelectPopup("","*.*","","打开",VAL_LOAD_BUTTON,0,0,1,1,path);//选择要打开的文件
+			if(sel>0)
+			{
+				file = OpenFile (path, VAL_READ_WRITE, VAL_APPEND, VAL_ASCII);//打开文件
+				GetFileSize(path,&filesize);
+				buffer=malloc(filesize * sizeof(char)+1);
+				bytes=ReadFile(file,buffer,filesize);//将文件内的信息读到缓冲区内
+				buffer[bytes]='\0';
+				ResetTextBox(panelHandle,PANEL_TEXTBOX,"");//清空文本框
+				SetCtrlVal(panelHandle,PANEL_TEXTBOX,buffer);//显示通讯录信息
+				
+			}
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Delete (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			if ((panelDelete = LoadPanel (0, "panel.uir", PANEL4)) < 0)
+					return -1;
+				DisplayPanel (panelDelete);//显示删除联系人面板
+		
+			
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Quit (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			QuitUserInterface (0);//退出用户界面
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Search (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+				if ((panelSearch = LoadPanel (0, "panel.uir", PANEL3)) < 0)
+					return -1;
+				DisplayPanel (panelSearch);//显示查找联系人面板
+		
+			break;
+	}
+	return 0;
+}
+
+
+int CVICALLBACK Save (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	unsigned char *save;
+	char name[30]={0};
+	char unit[30]={0};
+	char number[30]={0};
+	
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			save=malloc(90);
+			GetCtrlVal(panelInput,PANEL2_NAME,name);
+			GetCtrlVal(panelInput,PANEL2_UNIT,unit);
+			GetCtrlVal(panelInput,PANEL2_NUMBER,number);//输入添加的联系人基本信息
+			
+			for(i=0;i<30;i++)
+			{
+				if(name[i]!='\0')
+					save[i]=name[i];
+				else
+					save[i]=' ';
+				if(unit[i]!='\0')
+					save[i+30]=unit[i];
+				else
+					save[i+30]=' ';
+				if(number[i]!='\0')
+					save[i+60]=number[i];
+				else
+					save[i+60]=' ';
+			}
+			save[89]='\n';
+			
+			WriteFile(file,save,90);//将添加的联系人基本信息写入文件
+			free(save);
+			
+			ResetTextBox(panelInput,PANEL2_NAME,""); 
+			ResetTextBox(panelInput,PANEL2_UNIT,""); 
+			ResetTextBox(panelInput,PANEL2_NUMBER,"");//清空当前文本框以继续添加
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Return (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{   
+	switch (event)
+	{
+		case EVENT_COMMIT:
+
+			DiscardPanel (panelInput);//从添加联系人面板返回主面板
+			break;
+	}
+	return 0;
+}
+
+
+
+int CVICALLBACK Return2 (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			DiscardPanel (panelSearch);//从查找联系人面板返回主面板 
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Yes (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{   
+	char name[30]={0};
+
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			GetCtrlVal (panelSearch, PANEL3_FINDNAME, name);
+			ResetTextBox(panelSearch,PANEL3_RESULT,"");
+			for(i=0;i<bytes;i=i+90)//将输入的姓名与通讯录中联系人姓名逐条比较
+			{
+				for(j=0;j<90;j++)
+				{
+					str[j]=buffer[i+j];
+				}
+				str[89]='\0';
+				for(j=0;j<30;j++)
+				{
+					if(str[j]==name[j])
+					{
+						continue;
+					}
+					if(str[j]==' ')
+					
+						SetCtrlVal(panelSearch,PANEL3_RESULT,str);//姓名匹配后显示该联系人信息
+					
+					break;
+				}
+			}
+			
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Yes1 (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{   
+	char name[30]={0};
+
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			GetCtrlVal (panelDelete, PANEL4_DELETENAME, name);
+			ResetTextBox(panelDelete,PANEL4_RESULT1,"");
+			for(i=0;i<bytes;i=i+90)//将输入的姓名与通讯录中联系人姓名逐条比较
+			{
+				for(j=0;j<90;j++)
+				{
+					str[j]=buffer[i+j];
+				}
+				str[89]='\0';
+				for(j=0;j<30;j++)
+				{
+					if(str[j]==name[j])
+					{
+						continue;
+					}
+					if(str[j]==' ')
+					{
+						SetCtrlVal(panelDelete,PANEL4_RESULT1,str);//姓名匹配后显示该联系人信息
+						k=i;//记录匹配的联系人位置以进行后续删除步骤
+					}
+					break;
+				}
+			}
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK No (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	unsigned char *delete;
+	
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			if((bytes>0)&&(k>=0))
+			{
+				delete=malloc(bytes-k-90);
+				delete=&buffer[k+90];
+				for(j=0;j<(bytes-k-90);j++)//将删除的联系人后面的信息写入缓冲区相应位置以覆盖要删除的联系人
+				{
+					buffer[k+j]=delete[j];
+				}
+				buffer[bytes-90]='\0';
+				CloseFile(file);
+				file = OpenFile (path, VAL_READ_WRITE, VAL_TRUNCATE, VAL_ASCII);
+				WriteFile(file,buffer,bytes-90);//将删除联系人后的通讯录写入文件并替代文件内容
+				CloseFile(file);
+				file = OpenFile (path, VAL_READ_WRITE, VAL_APPEND, VAL_ASCII);
+				GetFileSize(path,&filesize);
+				buffer=malloc(filesize * sizeof(char)+1);
+				bytes=ReadFile(file,buffer,filesize);//重新打开文件并将内容写入缓冲区
+				buffer[bytes]='\0';
+				ResetTextBox(panelDelete,PANEL4_RESULT1,"");
+				break;
+			}
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK Return3 (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			k=-1;
+			DiscardPanel (panelDelete);//从删除联系人面板返回主面板
+			break;
+	}
+	return 0;
+}
